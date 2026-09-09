@@ -1,0 +1,6 @@
+{
+  "name": "Kolkata 2050: Experience the City of Tomorrow",
+  "description": "An immersive WebXR VR journey through Kolkata in 2050 exploring climate resilience, green mobility, flooding, extreme heat, clean energy, and future urbanism.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
