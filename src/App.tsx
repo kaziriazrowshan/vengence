@@ -3,7 +3,7 @@
  * University STEM Exhibition WebXR VR Application
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Kolkata2050Engine } from './vr/engine';
 import { SCENARIOS, POINTS_OF_INTEREST } from './vr/scenarios';
 import { ScenarioDefinition, ScenarioId, PreviewMode, TourWaypointInfo } from './types';
@@ -70,6 +70,62 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+
+  // HUD Auto-Hide & Minimal Controls State
+  const [isHudVisible, setIsHudVisible] = useState(true);
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pointerStartPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Reset or start the auto-hide countdown (4.5 seconds)
+  const resetHideTimer = useCallback(() => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+    }
+    // Only auto-hide if no blocking modals or dropdown menus are currently active
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsHudVisible(false);
+    }, 4500);
+  }, []);
+
+  const showHud = useCallback(() => {
+    setIsHudVisible(true);
+    resetHideTimer();
+  }, [resetHideTimer]);
+
+  const toggleHud = useCallback(() => {
+    setIsHudVisible((prev) => {
+      const next = !prev;
+      if (next) {
+        resetHideTimer();
+      } else if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+      return next;
+    });
+  }, [resetHideTimer]);
+
+  // Initial auto-hide timer on mount
+  useEffect(() => {
+    resetHideTimer();
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, [resetHideTimer]);
+
+  // Pause auto-hide while modals are open; resume when closed
+  useEffect(() => {
+    if (showPhotoGallery || showHeadsetGuide || showInfoModal || showSceneList || showVRModeMenu) {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+      setIsHudVisible(true);
+    } else {
+      resetHideTimer();
+    }
+  }, [showPhotoGallery, showHeadsetGuide, showInfoModal, showSceneList, showVRModeMenu, resetHideTimer]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -267,12 +323,48 @@ export default function App() {
 
   return (
     <div id="kolkata-2050-root" className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none">
-      {/* 3D WebXR WebGL Canvas Container */}
+      {/* 3D WebXR WebGL Canvas Container with Tap-to-Reveal HUD */}
       <div
         ref={containerRef}
         id="vr-canvas-container"
+        onPointerDown={(e) => {
+          pointerStartPos.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          if (pointerStartPos.current) {
+            const dist = Math.hypot(
+              e.clientX - pointerStartPos.current.x,
+              e.clientY - pointerStartPos.current.y
+            );
+            // Click/tap without drag
+            if (dist < 8) {
+              if (!isHudVisible) {
+                showHud();
+              } else {
+                toggleHud();
+              }
+            }
+          }
+          pointerStartPos.current = null;
+        }}
         className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
       />
+
+      {/* MINIMAL SHOW CONTROLS PILL (Appears when HUD is hidden) */}
+      {!isHudVisible && (
+        <button
+          id="reveal-hud-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            showHud();
+          }}
+          title="Click to show controls (or click anywhere on screen)"
+          className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/75 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-cyan-300 text-xs backdrop-blur-md transition-all shadow-lg cursor-pointer animate-in fade-in duration-300"
+        >
+          <Eye className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-[11px] font-medium tracking-wide">Controls</span>
+        </button>
+      )}
 
       {/* STEREOSCOPIC VR CARDBOARD CENTRAL DIVIDER (When Stereo Mode is Active) */}
       {previewMode === 'stereo' && (
@@ -301,73 +393,102 @@ export default function App() {
       {/* TOP FLOATING INTERFACE */}
       <header
         id="vr-top-header"
-        className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none z-30"
+        className={`absolute top-3 sm:top-4 left-3 sm:left-4 right-3 sm:right-4 flex items-center justify-between pointer-events-none z-30 transition-all duration-500 ease-out ${
+          isHudVisible
+            ? 'opacity-100 translate-y-0 pointer-events-none'
+            : 'opacity-0 -translate-y-4 pointer-events-none'
+        }`}
       >
-        {/* Branding & Subtitle */}
-        <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 px-4 py-2.5 rounded-xl pointer-events-auto shadow-2xl shadow-cyan-950/40">
-          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-white font-black tracking-wider text-base sm:text-lg font-['Cinzel']">
-                KOLKATA <span className="text-cyan-400">2050</span>
-              </h1>
-              <span className="text-[10px] uppercase font-bold tracking-widest bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30">
-                STEM XR
-              </span>
-            </div>
-            <p className="text-[11px] text-cyan-300/80 font-medium tracking-wide">EXPERIENCE THE CITY OF TOMORROW</p>
+        {/* Branding & Subtitle (Minimal design) */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            resetHideTimer();
+          }}
+          className="flex items-center gap-2.5 bg-slate-950/70 backdrop-blur-md border border-slate-800/80 hover:border-cyan-500/30 px-3.5 py-2 rounded-full pointer-events-auto shadow-lg shadow-black/40 transition-all"
+        >
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-sm shadow-cyan-400" />
+          <div className="flex items-center gap-2">
+            <h1 className="text-white font-extrabold tracking-wider text-sm font-['Cinzel'] leading-none">
+              KOLKATA <span className="text-cyan-400">2050</span>
+            </h1>
+            <span className="text-[9px] uppercase font-bold tracking-widest bg-cyan-950/80 text-cyan-300 px-1.5 py-0.5 rounded-full border border-cyan-500/30">
+              STEM XR
+            </span>
           </div>
         </div>
 
-        {/* Center Scenario Navigator for University Demonstrators */}
-        <div className="hidden md:flex items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-slate-700/60 px-3 py-1.5 rounded-xl pointer-events-auto shadow-lg">
+        {/* Center Scenario Navigator (Minimal design) */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            resetHideTimer();
+          }}
+          className="hidden md:flex items-center gap-1.5 bg-slate-950/70 backdrop-blur-md border border-slate-800/80 hover:border-slate-700 px-2.5 py-1 rounded-full pointer-events-auto shadow-lg text-xs"
+        >
           <button
             id="prev-scenario-btn"
-            onClick={handlePrev}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrev();
+              resetHideTimer();
+            }}
             aria-label="Previous Scenario"
-            className="p-1.5 text-slate-300 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-full transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
 
           <div
-            onClick={() => setShowSceneList(!showSceneList)}
-            className="cursor-pointer flex items-center gap-2 px-2.5 py-1 rounded-lg hover:bg-slate-800/80 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSceneList(!showSceneList);
+              resetHideTimer();
+            }}
+            className="cursor-pointer flex items-center gap-2 px-2 py-0.5 rounded-full hover:bg-slate-800/80 transition-colors"
           >
             {getScenarioIcon(currentScenario.id)}
-            <div className="text-left">
-              <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">
-                Scene {currentScenario.sceneNumber} of {SCENARIOS.length}
-              </div>
-              <div className="text-xs text-white font-semibold flex items-center gap-1.5">
+            <div className="text-left flex items-center gap-1.5">
+              <span className="text-[10px] text-cyan-400/90 font-mono font-bold">
+                {currentScenario.sceneNumber}/{SCENARIOS.length}
+              </span>
+              <span className="text-xs text-white font-medium max-w-[140px] truncate">
                 {currentScenario.title}
-                <span className="text-[10px] text-slate-400 font-normal">▼</span>
-              </div>
+              </span>
+              <span className="text-[9px] text-slate-400">▼</span>
             </div>
           </div>
 
           <button
             id="next-scenario-btn"
-            onClick={handleNext}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNext();
+              resetHideTimer();
+            }}
             aria-label="Next Scenario"
-            className="p-1.5 text-slate-300 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-full transition-colors"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Right Action Tools: VR Button with Mode Dropdown, Audio Toggle, Info */}
-        <div className="flex items-center gap-2 pointer-events-auto relative">
+        {/* Right Action Tools: Minimal rounded action pill group */}
+        <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto relative">
           {/* Exhibition Photos Button */}
           <button
             id="open-photos-btn"
-            onClick={() => handleOpenPhoto(0)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenPhoto(0);
+              resetHideTimer();
+            }}
             title="View Kolkata 2050 Concept Photos & Landmark Exhibits"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold tracking-wider backdrop-blur-md border bg-amber-500/20 hover:bg-amber-500/35 border-amber-400/60 text-amber-300 shadow-lg shadow-amber-950/40 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-md border bg-slate-950/70 hover:bg-amber-500/20 border-slate-800 hover:border-amber-400/40 text-amber-300 shadow-md transition-all cursor-pointer"
           >
-            <Images className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span className="hidden sm:inline">EXHIBIT PHOTOS</span>
-            <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+            <Images className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline font-semibold text-[11px]">PHOTOS</span>
+            <span className="bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.2 rounded-full">
               4
             </span>
           </button>
@@ -375,63 +496,66 @@ export default function App() {
           {/* Audio Synthesizer Mute Toggle */}
           <button
             id="mute-audio-btn"
-            onClick={handleToggleAudio}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleAudio();
+              resetHideTimer();
+            }}
             title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all ${
+            className={`p-2 rounded-full border backdrop-blur-md transition-all ${
               isMuted
-                ? 'bg-red-950/80 border-red-500/40 text-red-300'
-                : 'bg-slate-900/80 border-cyan-500/30 text-cyan-300 hover:bg-slate-800/90'
+                ? 'bg-red-950/70 border-red-500/40 text-red-300 hover:bg-red-900/60'
+                : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-slate-800'
             }`}
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
-            <span className="hidden sm:inline">{isMuted ? 'MUTED' : 'AUDIO ON'}</span>
+            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
           </button>
 
           {/* Primary VR / PREVIEW Trigger Button Group */}
           <div className="flex items-center">
             <button
               id="enter-vr-btn"
-              onClick={handleStartVROrPreview}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-l-xl text-xs font-bold tracking-wider backdrop-blur-md border transition-all shadow-lg ${
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartVROrPreview();
+                resetHideTimer();
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-l-full text-xs font-bold tracking-wider backdrop-blur-md border transition-all shadow-md ${
                 isPresentingVR
                   ? 'bg-emerald-600 text-white border-emerald-400 animate-pulse'
                   : previewMode !== 'none'
                   ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/30'
                   : isMetaQuest
-                  ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 border-cyan-200 shadow-cyan-400/50 animate-pulse font-black'
-                  : isVRSupported
-                  ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300 shadow-cyan-500/25'
-                  : 'bg-indigo-600/95 hover:bg-indigo-500 text-white border-indigo-400/60 shadow-indigo-600/30'
+                  ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 border-cyan-200 font-black'
+                  : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300'
               }`}
             >
-              <Glasses className="w-4 h-4" />
+              <Glasses className="w-3.5 h-3.5" />
               <span>
                 {isPresentingVR
-                  ? 'IN VR SESSION'
+                  ? 'IN VR'
                   : previewMode === 'tour'
-                  ? 'VR TOUR ACTIVE 🚁'
+                  ? 'TOUR 🚁'
                   : previewMode === 'stereo'
-                  ? 'STEREO VR 🥽'
+                  ? 'STEREO 🥽'
                   : previewMode === 'walk'
-                  ? 'WALK ACTIVE 🚶'
+                  ? 'WALK 🚶'
                   : isMetaQuest
-                  ? 'ENTER QUEST 3S VR'
-                  : isVRSupported
-                  ? 'ENTER VR'
-                  : 'START VR / PREVIEW'}
+                  ? 'QUEST 3S VR'
+                  : 'START VR'}
               </span>
             </button>
 
             {/* Quick VR Mode Picker Trigger */}
             <button
               id="vr-options-dropdown-btn"
-              onClick={() => setShowVRModeMenu(!showVRModeMenu)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowVRModeMenu(!showVRModeMenu);
+                resetHideTimer();
+              }}
               title="Select VR Experience Mode"
-              className={`px-2 py-2 rounded-r-xl border-y border-r transition-all backdrop-blur-md text-xs font-bold ${
-                previewMode !== 'none'
-                  ? 'bg-cyan-600 text-slate-950 border-cyan-300 hover:bg-cyan-400'
-                  : 'bg-indigo-700 text-white border-indigo-400/60 hover:bg-indigo-600'
-              }`}
+              className="px-2 py-1.5 rounded-r-full border-y border-r border-cyan-300 bg-cyan-600 hover:bg-cyan-500 text-slate-950 transition-all backdrop-blur-md text-[10px] font-bold"
             >
               ▼
             </button>
@@ -440,12 +564,16 @@ export default function App() {
           {/* Quest 3S & GitHub Deploy Hub Button */}
           <button
             id="quest-deploy-hub-btn"
-            onClick={() => setShowHeadsetGuide(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowHeadsetGuide(true);
+              resetHideTimer();
+            }}
             title="Meta Quest 3S Testing & GitHub Pages Deployment Guide"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold tracking-wider backdrop-blur-md border bg-cyan-950/80 hover:bg-cyan-900 border-cyan-500/40 text-cyan-300 shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-md border bg-slate-950/70 hover:bg-cyan-950/50 border-slate-800 hover:border-cyan-500/40 text-cyan-300 shadow-md transition-all cursor-pointer"
           >
-            <Glasses className="w-4 h-4 text-cyan-400" />
-            <span className="hidden lg:inline">QUEST 3S / GITHUB</span>
+            <Glasses className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden lg:inline text-[11px] font-semibold">QUEST GUIDE</span>
           </button>
 
           {/* VR Experience Mode Dropdown Menu */}
@@ -534,21 +662,29 @@ export default function App() {
           {/* Fullscreen Toggle */}
           <button
             id="fullscreen-toggle-btn"
-            onClick={handleToggleFullscreen}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleFullscreen();
+              resetHideTimer();
+            }}
             title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 rounded-xl backdrop-blur-md transition-colors"
+            className="p-2 bg-slate-950/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-full backdrop-blur-md transition-colors"
           >
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
           </button>
 
           {/* Exhibition Guide Modal Toggle */}
           <button
             id="info-modal-btn"
-            onClick={() => setShowInfoModal(!showInfoModal)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowInfoModal(!showInfoModal);
+              resetHideTimer();
+            }}
             title="Exhibition Information"
-            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/50 rounded-xl backdrop-blur-md transition-colors"
+            className="p-2 bg-slate-950/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-full backdrop-blur-md transition-colors"
           >
-            <Info className="w-4 h-4" />
+            <Info className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
@@ -557,77 +693,85 @@ export default function App() {
       {previewMode !== 'none' && (
         <div
           id="vr-preview-active-bar"
-          className="absolute top-20 left-4 right-4 flex items-center justify-between pointer-events-none z-30"
+          onClick={(e) => {
+            e.stopPropagation();
+            resetHideTimer();
+          }}
+          className={`absolute top-16 sm:top-18 left-3 sm:left-4 right-3 sm:right-4 flex items-center justify-between pointer-events-none z-30 transition-all duration-500 ease-out ${
+            isHudVisible
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 -translate-y-4'
+          }`}
         >
           {/* Active Mode Tag & Tour Controls */}
-          <div className="flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border border-cyan-500/40 p-1.5 px-3 rounded-2xl pointer-events-auto shadow-2xl">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+          <div className="flex items-center gap-2 bg-slate-950/80 backdrop-blur-xl border border-cyan-500/30 p-1 px-3 rounded-full pointer-events-auto shadow-xl">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
               {previewMode === 'tour'
-                ? 'CINEMATIC DRONE FLIGHT'
+                ? 'DRONE TOUR'
                 : previewMode === 'stereo'
-                ? 'STEREO CARDBOARD VR'
-                : 'FREE 3D WALK'}
+                ? 'STEREO VR'
+                : 'STREET WALK'}
             </span>
 
             {previewMode === 'tour' && (
               <>
-                <div className="w-px h-4 bg-slate-700" />
+                <div className="w-px h-3.5 bg-slate-800" />
                 <button
                   onClick={handleToggleTourPause}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-slate-200 hover:text-cyan-300 px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-slate-200 hover:text-cyan-300 px-2 py-0.5 rounded-full hover:bg-slate-800 transition-colors"
                 >
-                  {isTourPaused ? <Play className="w-3.5 h-3.5 text-emerald-400" /> : <Pause className="w-3.5 h-3.5 text-amber-400" />}
+                  {isTourPaused ? <Play className="w-3 h-3 text-emerald-400" /> : <Pause className="w-3 h-3 text-amber-400" />}
                   <span>{isTourPaused ? 'RESUME' : 'PAUSE'}</span>
                 </button>
                 <button
                   onClick={handleToggleSpeed}
-                  className="text-[11px] font-mono font-bold text-cyan-300 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                  className="text-[10px] font-mono font-bold text-cyan-300 hover:text-white px-1.5 py-0.5 rounded-full hover:bg-slate-800 transition-colors"
                 >
-                  {tourSpeed}x SPEED
+                  {tourSpeed}x
                 </button>
               </>
             )}
 
-            <div className="w-px h-4 bg-slate-700" />
+            <div className="w-px h-3.5 bg-slate-800" />
             <button
               onClick={() => handleSetPreviewMode('none')}
-              className="text-[11px] font-bold text-red-400 hover:text-red-300 px-2 py-1 rounded-lg hover:bg-red-950/50 transition-colors"
+              className="text-[10px] font-bold text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded-full hover:bg-red-950/40 transition-colors"
             >
               ✕ EXIT
             </button>
           </div>
 
           {/* Landmark Fast-Jump Picker for Demonstrator */}
-          <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 p-1.5 px-2.5 rounded-2xl pointer-events-auto shadow-xl text-[11px] text-slate-300">
-            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mr-1">FLY TO:</span>
+          <div className="hidden sm:flex items-center gap-1 bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 p-1 px-2.5 rounded-full pointer-events-auto shadow-xl text-[11px] text-slate-300">
+            <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider mr-0.5">FLY TO:</span>
             <button
               onClick={() => handleJumpToLandmark(0)}
-              className="px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded-full hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors text-[10px]"
             >
               Howrah Bridge
             </button>
             <button
               onClick={() => handleJumpToLandmark(2)}
-              className="px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded-full hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors text-[10px]"
             >
               Sky-Metro
             </button>
             <button
               onClick={() => handleJumpToLandmark(3)}
-              className="px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded-full hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors text-[10px]"
             >
-              Smart Boulevard
+              Boulevard
             </button>
             <button
               onClick={() => handleJumpToLandmark(4)}
-              className="px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded-full hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors text-[10px]"
             >
               Green Towers
             </button>
             <button
               onClick={() => handleJumpToLandmark(5)}
-              className="px-2 py-1 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors"
+              className="px-2 py-0.5 rounded-full hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition-colors text-[10px]"
             >
               Skydeck
             </button>
@@ -672,28 +816,37 @@ export default function App() {
       {/* BOTTOM IMMERSIVE HUD */}
       <footer
         id="vr-bottom-hud"
-        className="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-3 pointer-events-none z-30"
+        className={`absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-3 pointer-events-none z-30 transition-all duration-500 ease-out ${
+          isHudVisible
+            ? 'opacity-100 translate-y-0 pointer-events-none'
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
       >
-        {/* Left: Dynamic Drone Tour Landmark Card or Key Scenario Takeaway Banner */}
-        <div className="w-full sm:max-w-xl bg-slate-900/90 backdrop-blur-md border border-cyan-500/25 p-3.5 rounded-2xl pointer-events-auto shadow-2xl">
+        {/* Left: Minimal Scenario Card / Drone Tour Landmark Card */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            resetHideTimer();
+          }}
+          className="w-full sm:max-w-md bg-slate-950/75 backdrop-blur-md border border-slate-800/90 hover:border-cyan-500/30 p-2.5 px-3.5 rounded-2xl pointer-events-auto shadow-xl transition-all"
+        >
           {previewMode === 'tour' && currentWaypoint ? (
             <div>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-widest bg-cyan-500/25 text-cyan-300 border border-cyan-400/40">
-                  LANDMARK IN VIEW • 360° DRONE
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                  DRONE TOUR • {Math.round(currentWaypoint.progress * 100)}%
                 </span>
-                <span className="text-[10px] text-cyan-400/80 font-mono font-bold">
-                  {Math.round(currentWaypoint.progress * 100)}% of city tour
+                <span className="text-[10px] text-cyan-400/80 font-mono">
+                  {currentWaypoint.bengaliName}
                 </span>
               </div>
-              <h2 className="text-white font-bold text-sm sm:text-base leading-tight">
-                {currentWaypoint.name} — <span className="text-cyan-300 font-medium text-xs">{currentWaypoint.bengaliName}</span>
+              <h2 className="text-white font-bold text-xs sm:text-sm truncate">
+                {currentWaypoint.name}
               </h2>
-              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1 leading-normal">
                 {currentWaypoint.insight}
               </p>
-              {/* Tour Progress Bar */}
-              <div className="w-full bg-slate-800 h-1 rounded-full mt-2 overflow-hidden">
+              <div className="w-full bg-slate-800/80 h-1 rounded-full mt-1.5 overflow-hidden">
                 <div
                   className="bg-cyan-400 h-full transition-all duration-300"
                   style={{ width: `${Math.round(currentWaypoint.progress * 100)}%` }}
@@ -702,64 +855,71 @@ export default function App() {
             </div>
           ) : (
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  {currentScenario.badge}
-                </span>
-                {currentScenario.airQualityStatus && (
-                  <span
-                    className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider ${
-                      currentScenario.airQualityStatus.includes('Severe')
-                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                        : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
-                    }`}
-                  >
-                    {currentScenario.airQualityStatus}
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                    Scene #{currentScenario.sceneNumber}
                   </span>
-                )}
-                {currentScenario.weather === 'storm' && (
-                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-950 text-blue-300 border border-blue-500/40">
-                    MONSOON SURGE
-                  </span>
-                )}
-                {currentScenario.heatHaze && (
-                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-950 text-amber-300 border border-amber-500/40">
-                    44°C HEATWAVE
-                  </span>
-                )}
+                  {currentScenario.airQualityStatus && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-slate-900 text-slate-300 border border-slate-700">
+                      {currentScenario.airQualityStatus}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDetailsExpanded(!isDetailsExpanded);
+                    resetHideTimer();
+                  }}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono"
+                >
+                  {isDetailsExpanded ? 'Less ▲' : 'Details ▼'}
+                </button>
               </div>
-              <h2 className="text-white font-bold text-sm sm:text-base leading-tight">
-                {currentScenario.title} — <span className="text-cyan-300 font-medium text-xs">{currentScenario.subtitle}</span>
+
+              <h2 className="text-white font-bold text-xs sm:text-sm truncate leading-snug">
+                {currentScenario.title} — <span className="text-cyan-300 font-normal text-xs">{currentScenario.subtitle}</span>
               </h2>
-              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                {currentScenario.description}
-              </p>
-              <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-start gap-1.5 text-[11px] text-cyan-300/90 font-medium">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
-                <span>{currentScenario.keyTakeaway}</span>
-              </div>
+
+              {isDetailsExpanded ? (
+                <div className="mt-1.5 pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-300 space-y-1 animate-in fade-in duration-200">
+                  <p className="leading-relaxed">{currentScenario.description}</p>
+                  <div className="flex items-start gap-1 text-cyan-300 font-medium">
+                    <Sparkles className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
+                    <span>{currentScenario.keyTakeaway}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1 leading-normal">
+                  {currentScenario.keyTakeaway}
+                </p>
+              )}
             </div>
           )}
         </div>
 
-        {/* Right: Quick Controls & Navigation Guide */}
-        <div className="hidden lg:flex flex-col items-end gap-1.5 pointer-events-auto">
-          <div className="bg-slate-900/85 backdrop-blur-md border border-slate-800 px-3 py-2 rounded-xl text-[11px] text-slate-300 space-y-1">
-            <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider text-[10px]">
-              <Compass className="w-3.5 h-3.5" /> Navigation Controls
-            </div>
-            <div>
-              <span className="font-mono text-cyan-300 font-bold">WASD / Arrow Keys</span> — Walk Street
-            </div>
-            <div>
-              <span className="font-mono text-cyan-300 font-bold">Click + Drag</span> — 360° Panoramic Look
-            </div>
-            <div>
-              <span className="font-mono text-cyan-300 font-bold">Click 3D Beacons</span> — Unlock STEM Insights
-            </div>
-            <div className="text-emerald-400 font-semibold pt-0.5 border-t border-slate-800/80">
-              VR: Point + Trigger to Teleport | Stick to Snap Turn
-            </div>
+        {/* Right: Quick Controls & Navigation Guide (Minimal design) */}
+        <div className="hidden lg:flex items-center pointer-events-auto">
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              resetHideTimer();
+            }}
+            className="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 px-3.5 py-1.5 rounded-full text-[11px] text-slate-300 shadow-lg flex items-center gap-3"
+          >
+            <span className="flex items-center gap-1 font-mono text-cyan-300 font-semibold">
+              <Compass className="w-3 h-3 text-cyan-400" />
+              WASD: Walk
+            </span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-300">
+              Drag: Look
+            </span>
+            <span className="text-slate-600">•</span>
+            <span className="text-emerald-300 font-medium">
+              VR: Point + Teleport
+            </span>
           </div>
         </div>
       </footer>
@@ -1121,31 +1281,46 @@ git push -u origin main`}
       {!isPresentingVR && !showPhotoGallery && (
         <div
           id="quick-photo-dock"
-          className="absolute bottom-16 right-4 sm:right-6 flex flex-col items-end gap-2 pointer-events-auto z-30 animate-in fade-in slide-in-from-bottom-3 duration-300"
+          onClick={(e) => {
+            e.stopPropagation();
+            resetHideTimer();
+          }}
+          className={`absolute bottom-16 sm:bottom-16 right-3 sm:right-4 flex flex-col items-end gap-2 z-30 transition-all duration-500 ease-out ${
+            isHudVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
         >
-          <div className="bg-slate-900/90 backdrop-blur-xl border border-amber-500/40 p-2 rounded-2xl shadow-2xl shadow-black/70 flex items-center gap-2.5 max-w-sm">
-            <div className="flex items-center gap-1.5 pl-1.5 pr-1 cursor-pointer" onClick={() => handleOpenPhoto(0)}>
-              <Images className="w-4 h-4 text-amber-400 shrink-0 animate-bounce" />
-              <div className="text-[11px] leading-tight">
-                <span className="font-bold text-amber-300 block">Exhibition Photos</span>
-                <span className="text-[9px] text-slate-400">4 Concept Renderings</span>
-              </div>
+          <div className="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 hover:border-amber-500/30 p-1.5 px-3 rounded-full shadow-lg flex items-center gap-2 max-w-sm transition-all">
+            <div
+              className="flex items-center gap-1.5 cursor-pointer hover:text-amber-300 transition-colors"
+              onClick={() => {
+                handleOpenPhoto(0);
+                resetHideTimer();
+              }}
+            >
+              <Images className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="font-semibold text-amber-300 text-[11px]">Exhibits</span>
             </div>
 
-            <div className="flex items-center gap-1.5 border-l border-slate-700/60 pl-2">
+            <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
               {EXHIBITION_PHOTOS.map((photo, idx) => (
                 <button
                   key={photo.id}
-                  onClick={() => handleOpenPhoto(idx)}
-                  title={`View & Fly to: ${photo.title}`}
-                  className="group relative w-11 h-8 sm:w-12 sm:h-9 rounded-lg overflow-hidden border border-slate-700 hover:border-amber-400 transition-all hover:scale-105 active:scale-95 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenPhoto(idx);
+                    resetHideTimer();
+                  }}
+                  title={`View: ${photo.title}`}
+                  className="group relative w-8 h-6 sm:w-9 sm:h-6 rounded-md overflow-hidden border border-slate-700 hover:border-amber-400 transition-all hover:scale-105 active:scale-95 shrink-0"
                 >
                   <img
                     src={photo.imageSrc}
                     alt={photo.title}
                     className="w-full h-full object-cover group-hover:brightness-110 transition-all"
                   />
-                  <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] text-center font-bold text-amber-300 truncate px-0.5">
+                  <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] text-center font-bold text-amber-300 truncate">
                     #{idx + 1}
                   </span>
                 </button>
@@ -1153,8 +1328,12 @@ git push -u origin main`}
             </div>
 
             <button
-              onClick={() => handleOpenPhoto(0)}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-bold px-2.5 py-1.5 rounded-xl transition-colors shrink-0 shadow-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenPhoto(0);
+                resetHideTimer();
+              }}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors shrink-0 shadow-sm"
             >
               Gallery
             </button>

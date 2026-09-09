@@ -1,4 +1,4 @@
-import { Component, ErrorInfo, ReactNode, StrictMode } from 'react';
+import React, { ErrorInfo, ReactNode, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
@@ -12,10 +12,11 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class RootErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public override state: ErrorBoundaryState = { hasError: false, error: null };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {

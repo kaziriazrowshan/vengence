@@ -4,11 +4,24 @@ import howrahPhoto from '../assets/images/howrah_bridge_2050_1788943932870.jpg';
 import skymetroPhoto from '../assets/images/kolkata_skymetro_2050_1788943946427.jpg';
 import spongeCityPhoto from '../assets/images/hooghly_sponge_city_1788943963962.jpg';
 import forestTowersPhoto from '../assets/images/vertical_forest_towers_1788943979447.jpg';
+import {
+  VehicleEntity,
+  createAmbassadorTaxi,
+  createCityBus,
+  createElectricSedan,
+  createSkylineMonorail,
+  createHeritageTram2050
+} from './vehicles';
+import { TrafficLightSystem } from './trafficSystem';
+import { buildStreetRealismDetails } from './streetDetails';
+import { PedestrianCrowdSystem } from './pedestrians';
 
 export interface CityEnvironment {
   group: THREE.Group;
   buildings: THREE.Mesh[];
-  vehicles: Vehicle[];
+  vehicles: VehicleEntity[];
+  trafficLights: TrafficLightSystem;
+  pedestrians: PedestrianCrowdSystem;
   turbines: { rotor: THREE.Object3D; speed: number }[];
   floodWaterMesh: THREE.Mesh;
   riverMesh: THREE.Mesh;
@@ -89,7 +102,7 @@ export function buildKolkata2050City(): CityEnvironment {
   cityGroup.name = 'Kolkata2050_Environment';
 
   const buildings: THREE.Mesh[] = [];
-  const vehicles: Vehicle[] = [];
+  const vehicles: VehicleEntity[] = [];
   const turbines: { rotor: THREE.Object3D; speed: number }[] = [];
   const floodBarriers: THREE.Object3D[] = [];
   const energyLines: { points: THREE.Vector3[]; line: THREE.Line; progress: number }[] = [];
@@ -529,6 +542,60 @@ export function buildKolkata2050City(): CityEnvironment {
   );
   cityGroup.add(forestBillboard);
 
+  // 7.2 GRAND CENTRAL TIMES-SQUARE CURVED MEGA-SCREEN BILLBOARD (Elevated at X = 0, Y = 28, Z = -58)
+  // Showcases the 4 Concept Photos with dynamic cycling, scanlines, Bengali marquee and telemetry
+  const megaScreenGroup = new THREE.Group();
+  megaScreenGroup.position.set(0, 28, -58);
+
+  const textureLoader = new THREE.TextureLoader();
+  const conceptPhotoTextures = [
+    textureLoader.load(howrahPhoto),
+    textureLoader.load(skymetroPhoto),
+    textureLoader.load(spongeCityPhoto),
+    textureLoader.load(forestTowersPhoto)
+  ];
+
+  const photoCaptions = [
+    { eng: 'HOWRAH BRIDGE 2.0 // CANTILEVER RETROFIT & TIDAL DAMPERS', ben: 'হাওড়া সেতু ২.০ • টাইডাল পাওয়ার' },
+    { eng: 'MUMBAI-KOLKATA SKYLINE MONORAIL & MAGLEV ECO-ARTERY', ben: 'স্কাইলাইন মনোরেল ও ম্যাগলেভ সরণি' },
+    { eng: 'HOOGHLY SPONGE-CITY // 50,000 m³ TIDAL FLOOD GATE BASIN', ben: 'হুগলি স্পঞ্জ-সিটি জলবায়ু প্রাচীর' },
+    { eng: 'VERTICAL FOREST DISTRICT // 15,000 CARBON ABSORBING TREES', ben: 'উল্লম্ব অরণ্য ও সৌরবায়ু হাব' }
+  ];
+
+  // 22m x 12.5m Curved Display
+  const megaGeo = new THREE.PlaneGeometry(22, 12.5, 8, 1);
+  const megaMat = new THREE.MeshBasicMaterial({
+    map: conceptPhotoTextures[0],
+    side: THREE.DoubleSide
+  });
+  const megaMesh = new THREE.Mesh(megaGeo, megaMat);
+  megaMesh.position.z = 0.2;
+  megaScreenGroup.add(megaMesh);
+
+  // High-Tech Cyber Frame & Gold/Cyan Holographic Bezel
+  const megaFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(23.2, 13.6, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x060b13, metalness: 0.9, roughness: 0.2 })
+  );
+  const megaGlowBorder = new THREE.Mesh(
+    new THREE.BoxGeometry(23.4, 13.8, 0.1),
+    new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true })
+  );
+  megaGlowBorder.position.z = 0.25;
+  megaScreenGroup.add(megaFrame, megaGlowBorder);
+
+  // Top Bengali & English Marquee Banner on Mega-Screen
+  let currentPhotoIndex = 0;
+  let photoCycleTimer = 0;
+  const marqueeGeo = new THREE.PlaneGeometry(21, 2.2);
+  const marqueeTex = createHolographicSignTexture(photoCaptions[0].ben, photoCaptions[0].eng, '#ffaa00');
+  const marqueeMat = new THREE.MeshBasicMaterial({ map: marqueeTex, transparent: true, side: THREE.DoubleSide });
+  const marqueeMesh = new THREE.Mesh(marqueeGeo, marqueeMat);
+  marqueeMesh.position.set(0, 7.6, 0.3);
+  megaScreenGroup.add(marqueeMesh);
+
+  cityGroup.add(megaScreenGroup);
+
   // 8. GREEN DISTRICT PARK & TREES (East sector at X = 18 to 28)
   const parkGeo = new THREE.PlaneGeometry(35, 75);
   const parkMat = new THREE.MeshStandardMaterial({
@@ -621,120 +688,189 @@ export function buildKolkata2050City(): CityEnvironment {
   cityGroup.add(energyLine);
   energyLines.push({ points: curve.getPoints(50), line: energyLine, progress: 0 });
 
-  // 10. DYNAMIC VEHICLES (Metro, Autonomous Tram, Electric Pods)
-  // (a) Sky-Metro Train
-  const metroTrain = new THREE.Group();
-  for (let car = 0; car < 3; car++) {
-    const carMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 2.4, 9),
-      new THREE.MeshStandardMaterial({ color: 0x0c1b29, metalness: 0.8, roughness: 0.2 })
-    );
-    carMesh.position.set(0, 0, car * 9.8);
-    // Glowing train window stripe
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(3.25, 0.4, 8), neonCyanMat);
-    stripe.position.set(0, 0.3, car * 9.8);
-    metroTrain.add(carMesh, stripe);
-  }
-  // Headlight
-  const metroHeadlight = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 0.2), neonCyanMat);
-  metroHeadlight.position.set(0, 0, -1);
-  metroTrain.add(metroHeadlight);
-  cityGroup.add(metroTrain);
+  // 10. REALISTIC STREET ENVIRONMENT DETAILS, INFRASTRUCTURE & PEDESTRIANS
+  const streetDetails = buildStreetRealismDetails(180);
+  cityGroup.add(streetDetails);
 
-  vehicles.push({
-    mesh: metroTrain,
+  const trafficLights = new TrafficLightSystem();
+  cityGroup.add(trafficLights.group);
+
+  const pedestrians = new PedestrianCrowdSystem();
+  cityGroup.add(pedestrians.group);
+
+  // 11. REALISTIC VEHICLE FLEET (Skyline Monorail, Heritage Tram, Yellow Cabs, Buses, Cyber EVs)
+  // (a) Mumbai-Style Skyline Monorail (Elevated Guideway Track at X = -22, Y = 17.5)
+  const monorailData = createSkylineMonorail();
+  cityGroup.add(monorailData.group);
+
+  const monorailEntity: VehicleEntity = {
+    mesh: monorailData.group,
+    type: 'monorail',
     route: 'metro',
-    speed: 35,
+    speed: 34,
+    targetSpeed: 34,
+    currentSpeed: 34,
     t: 0,
-    radius: 90,
-    yOffset: 17.5
+    direction: -1,
+    laneX: -22,
+    yOffset: 17.5,
+    length: 36,
+    wheels: [],
+    stoppedAtLight: false
+  };
+  vehicles.push(monorailEntity);
+
+  // (b) Modernized Kolkata Heritage Tram 2.0 (Dual articulated low-floor cars with pantograph)
+  const tramData = createHeritageTram2050();
+  cityGroup.add(tramData.group);
+
+  const tramEntity: VehicleEntity = {
+    mesh: tramData.group,
+    type: 'tram',
+    route: 'tram',
+    speed: 13,
+    targetSpeed: 13,
+    currentSpeed: 13,
+    t: 0,
+    direction: 1,
+    laneX: 0,
+    yOffset: 0.05,
+    length: 16,
+    wheels: tramData.wheels,
+    stoppedAtLight: false
+  };
+  vehicles.push(tramEntity);
+
+  // (c) Iconic Kolkata 2050 Ambassador Yellow Cabs (4 Taxis with roof signs & rotating alloy wheels)
+  const taxiConfigs = [
+    { laneX: 5.2, dir: 1 as const, startZ: -70, speed: 18 },
+    { laneX: 5.2, dir: 1 as const, startZ: 10, speed: 19 },
+    { laneX: -5.2, dir: -1 as const, startZ: 45, speed: 18.5 },
+    { laneX: -5.2, dir: -1 as const, startZ: -35, speed: 19.5 }
+  ];
+
+  taxiConfigs.forEach((cfg) => {
+    const taxiData = createAmbassadorTaxi();
+    taxiData.group.position.set(cfg.laneX, 0, cfg.startZ);
+    taxiData.group.rotation.y = cfg.dir === 1 ? 0 : Math.PI;
+    cityGroup.add(taxiData.group);
+
+    const taxiEntity: VehicleEntity = {
+      mesh: taxiData.group,
+      type: 'taxi',
+      route: 'road',
+      speed: cfg.speed,
+      targetSpeed: cfg.speed,
+      currentSpeed: cfg.speed,
+      t: 0,
+      direction: cfg.dir,
+      laneX: cfg.laneX,
+      yOffset: 0,
+      length: 4.6,
+      wheels: taxiData.wheels,
+      brakeLights: taxiData.brakeLights,
+      stoppedAtLight: false
+    };
+    vehicles.push(taxiEntity);
   });
 
-  // (b) Autonomous Kolkata 2050 Trams (Center Boulevard)
-  for (let tIdx = 0; tIdx < 2; tIdx++) {
-    const tram = new THREE.Group();
-    const tramBody = new THREE.Mesh(
-      new THREE.BoxGeometry(2.4, 2.6, 12),
-      new THREE.MeshStandardMaterial({ color: 0x142b3a, metalness: 0.6, roughness: 0.3 })
-    );
-    tramBody.position.y = 1.3;
-    tram.add(tramBody);
+  // (d) Kolkata State CSTC 2050 Electric Double-Decker & Long Express Buses
+  const busConfigs = [
+    { laneX: 5.8, dir: 1 as const, startZ: -40, speed: 15 },
+    { laneX: -5.8, dir: -1 as const, startZ: 25, speed: 15 }
+  ];
 
-    // Glowing Kolkata tram cyan accent
-    const tramAccent = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.3, 11), neonAmberMat);
-    tramAccent.position.y = 1.8;
-    tram.add(tramAccent);
+  busConfigs.forEach((cfg) => {
+    const busData = createCityBus();
+    busData.group.position.set(cfg.laneX, 0, cfg.startZ);
+    busData.group.rotation.y = cfg.dir === 1 ? 0 : Math.PI;
+    cityGroup.add(busData.group);
 
-    // Tram destination sign "ESPLANADE - SALT LAKE 2050"
-    const tramSignTex = createHolographicSignTexture('এসপ্ল্যানেড - সল্টলেক', 'SMART TRAM', '#ffaa00');
-    const tramSign = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 0.6),
-      new THREE.MeshBasicMaterial({ map: tramSignTex, transparent: true })
-    );
-    tramSign.position.set(0, 2.5, -6.02);
-    tram.add(tramSign);
-
-    cityGroup.add(tram);
-    vehicles.push({
-      mesh: tram,
-      route: 'tram',
-      speed: 10 + tIdx * 4,
-      t: tIdx * 0.5,
-      radius: 65,
-      yOffset: 0
-    });
-  }
-
-  // (c) Autonomous Electric Pods & Buses
-  for (let pIdx = 0; pIdx < 4; pIdx++) {
-    const pod = new THREE.Group();
-    const podMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 1.4, 3.4),
-      new THREE.MeshStandardMaterial({ color: 0x1c2b3e, metalness: 0.8, roughness: 0.3 })
-    );
-    podMesh.position.y = 0.7;
-    pod.add(podMesh);
-
-    // Front headlights & rear taillights
-    const frontLight = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.1), neonCyanMat);
-    frontLight.position.set(0, 0.5, -1.72);
-    const rearLight = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.1), new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-    rearLight.position.set(0, 0.5, 1.72);
-    pod.add(frontLight, rearLight);
-
-    cityGroup.add(pod);
-    vehicles.push({
-      mesh: pod,
+    const busEntity: VehicleEntity = {
+      mesh: busData.group,
+      type: 'bus',
       route: 'road',
-      speed: 14 + pIdx * 3,
-      t: pIdx * 0.25,
-      radius: 60,
-      yOffset: 0
-    });
-  }
+      speed: cfg.speed,
+      targetSpeed: cfg.speed,
+      currentSpeed: cfg.speed,
+      t: 0,
+      direction: cfg.dir,
+      laneX: cfg.laneX,
+      yOffset: 0,
+      length: 10.6,
+      wheels: busData.wheels,
+      brakeLights: busData.brakeLights,
+      stoppedAtLight: false
+    };
+    vehicles.push(busEntity);
+  });
 
-  // 11. STREET FURNITURE: Smart streetlights, cooling mist totems, benches
+  // (e) Modern Cyber Sports Sedans (Metallic Crimson, Pearl White, Titanium Grey, Emerald)
+  const sedanConfigs = [
+    { color: 0xd91438, laneX: 3.6, dir: 1 as const, startZ: -85, speed: 22 },
+    { color: 0xf4f7fa, laneX: 3.6, dir: 1 as const, startZ: -10, speed: 21 },
+    { color: 0x334155, laneX: -3.6, dir: -1 as const, startZ: 55, speed: 22 },
+    { color: 0x059669, laneX: -3.6, dir: -1 as const, startZ: -15, speed: 21.5 }
+  ];
+
+  sedanConfigs.forEach((cfg) => {
+    const sedanData = createElectricSedan(cfg.color);
+    sedanData.group.position.set(cfg.laneX, 0, cfg.startZ);
+    sedanData.group.rotation.y = cfg.dir === 1 ? 0 : Math.PI;
+    cityGroup.add(sedanData.group);
+
+    const sedanEntity: VehicleEntity = {
+      mesh: sedanData.group,
+      type: 'sedan',
+      route: 'road',
+      speed: cfg.speed,
+      targetSpeed: cfg.speed,
+      currentSpeed: cfg.speed,
+      t: 0,
+      direction: cfg.dir,
+      laneX: cfg.laneX,
+      yOffset: 0,
+      length: 4.4,
+      wheels: sedanData.wheels,
+      brakeLights: sedanData.brakeLights,
+      stoppedAtLight: false
+    };
+    vehicles.push(sedanEntity);
+  });
+
+  // 12. STREET LIGHTS ALONG BOULEVARD (Curved Swan-Neck Fixtures)
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x243342, metalness: 0.7 });
   for (let z = -70; z <= 40; z += 18) {
-    [-8, 8].forEach((x) => {
+    [-8.5, 8.5].forEach((x) => {
+      const poleGroup = new THREE.Group();
+      poleGroup.position.set(x, 0, z);
+
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 6.5, 6), poleMat);
-      pole.position.set(x, 3.25, z);
-      cityGroup.add(pole);
+      pole.position.y = 3.25;
 
-      // Downward luminaire
-      const luminaire = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 1.2), neonCyanMat);
-      luminaire.position.set(x + (x > 0 ? -0.5 : 0.5), 6.4, z);
-      cityGroup.add(luminaire);
+      const swanArm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.8), poleMat);
+      swanArm.rotation.z = (Math.PI / 3) * (x > 0 ? -1 : 1);
+      swanArm.position.set(x > 0 ? -0.7 : 0.7, 6.4, 0);
 
-      // Smart air-quality sensor ring on street pole
-      const aqiRing = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.04, 6, 12), neonGreenMat);
-      aqiRing.rotation.x = Math.PI / 2;
-      aqiRing.position.set(x, 2.5, z);
-      cityGroup.add(aqiRing);
+      const lampHead = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.12, 0.35),
+        new THREE.MeshStandardMaterial({ color: 0x111620, metalness: 0.9 })
+      );
+      lampHead.position.set(x > 0 ? -1.3 : 1.3, 6.7, 0);
+
+      const lampLens = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.5, 0.28),
+        new THREE.MeshBasicMaterial({ color: 0xfffae0 })
+      );
+      lampLens.rotation.x = Math.PI / 2;
+      lampLens.position.set(x > 0 ? -1.3 : 1.3, 6.63, 0);
+
+      poleGroup.add(pole, swanArm, lampHead, lampLens);
+      cityGroup.add(poleGroup);
     });
   }
 
-  // 12. SCENE 11 OBSERVATION SKY-DECK PLATFORM (At Y = 78, Z = -15)
+  // 13. SCENE 11 OBSERVATION SKY-DECK PLATFORM (At Y = 78, Z = -15)
   const deckGroup = new THREE.Group();
   deckGroup.position.set(0, 76, -15);
 
@@ -777,41 +913,139 @@ export function buildKolkata2050City(): CityEnvironment {
       t.rotor.rotation.y += t.speed * delta;
     });
 
-    // 2. Animate vehicles along routes
-    vehicles.forEach((v) => {
-      v.t = (v.t + (v.speed * delta) / 100) % 1.0;
+    // 2. Dynamic Mega-Screen Concept Photo Showcase Slide Cycle
+    photoCycleTimer += delta;
+    if (photoCycleTimer > 6.5) {
+      photoCycleTimer = 0;
+      currentPhotoIndex = (currentPhotoIndex + 1) % conceptPhotoTextures.length;
+      megaMat.map = conceptPhotoTextures[currentPhotoIndex];
+      megaMat.needsUpdate = true;
 
+      // Update Top Bengali/English Marquee Banner
+      const updatedMarqueeTex = createHolographicSignTexture(
+        photoCaptions[currentPhotoIndex].ben,
+        photoCaptions[currentPhotoIndex].eng,
+        '#ffaa00'
+      );
+      marqueeMat.map = updatedMarqueeTex;
+      marqueeMat.needsUpdate = true;
+    }
+
+    // 3. Update Traffic Light Cycle
+    trafficLights.update(delta);
+
+    // 4. Update Pedestrian Crowd Movement & Crosswalk AI
+    pedestrians.update(delta, trafficLights.nsState === 'green');
+
+    // 5. Update Vehicles & Intelligent Traffic AI
+    const roadBounds = { minZ: -95, maxZ: 65 };
+
+    vehicles.forEach((v) => {
       if (v.route === 'metro') {
-        // Linear track along X = -22, Z from +80 to -120
-        const zPos = 70 - v.t * 180;
-        v.mesh.position.set(-22, v.yOffset, zPos);
-      } else if (v.route === 'tram') {
-        // Back and forth down central boulevard
-        const cycle = Math.sin(v.t * Math.PI * 2);
-        const zPos = -15 + cycle * 55;
-        v.mesh.position.set(cycle > 0 ? -2.5 : 2.5, v.yOffset, zPos);
-        v.mesh.rotation.y = cycle > 0 ? Math.PI : 0;
-      } else if (v.route === 'road') {
-        // Loop around the outer boulevard lanes
-        const zPos = -15 + Math.sin(v.t * Math.PI * 2) * 50;
-        const xPos = Math.cos(v.t * Math.PI * 2) > 0 ? 5.5 : -5.5;
-        v.mesh.position.set(xPos, v.yOffset, zPos);
-        v.mesh.rotation.y = Math.cos(v.t * Math.PI * 2) > 0 ? 0 : Math.PI;
+        // High-Speed Skyline Monorail (Linear transit glide from Z = +75 to Z = -135)
+        v.mesh.position.z += v.speed * delta * v.direction;
+        if (v.mesh.position.z < -135) {
+          v.mesh.position.z = 75;
+        }
+        v.mesh.position.x = -22;
+        v.mesh.position.y = v.yOffset;
+        return;
+      }
+
+      if (v.route === 'tram') {
+        // Modernized Heritage Tram down central tracks
+        v.mesh.position.z += v.speed * delta * v.direction;
+        if (v.mesh.position.z > 55) {
+          v.direction = -1;
+          v.mesh.rotation.y = Math.PI;
+        } else if (v.mesh.position.z < -85) {
+          v.direction = 1;
+          v.mesh.rotation.y = 0;
+        }
+
+        // Tram wheels rotate
+        const tramSpin = (v.speed * delta) / 0.36;
+        v.wheels.forEach((w) => {
+          w.rotation.x += tramSpin * v.direction;
+        });
+        return;
+      }
+
+      if (v.route === 'road') {
+        // (A) Check traffic light ahead
+        const lightStopRequired = trafficLights.shouldVehicleStop(v.mesh.position.z, v.direction);
+
+        // (B) Check distance to vehicle ahead in the same lane (anti-collision following AI)
+        let vehicleAheadDistance = 999;
+        for (const other of vehicles) {
+          if (other === v || other.route !== 'road') continue;
+          if (Math.abs(other.laneX - v.laneX) < 1.0) {
+            const dz = (other.mesh.position.z - v.mesh.position.z) * v.direction;
+            if (dz > 0 && dz < vehicleAheadDistance) {
+              vehicleAheadDistance = dz;
+            }
+          }
+        }
+
+        // Determine if vehicle needs to brake
+        const mustStop = lightStopRequired || vehicleAheadDistance < 8.5;
+
+        if (mustStop) {
+          v.targetSpeed = 0;
+          // Smooth deceleration
+          v.currentSpeed = Math.max(0, v.currentSpeed - 14 * delta);
+          v.stoppedAtLight = true;
+
+          // Intensify brake lights
+          if (v.brakeLights) {
+            v.brakeLights.forEach((bl) => {
+              (bl.material as THREE.MeshStandardMaterial).emissiveIntensity = 2.5;
+            });
+          }
+        } else {
+          v.targetSpeed = v.speed;
+          // Smooth acceleration
+          v.currentSpeed = Math.min(v.targetSpeed, v.currentSpeed + 7.5 * delta);
+          v.stoppedAtLight = false;
+
+          // Normal running brake lights
+          if (v.brakeLights) {
+            v.brakeLights.forEach((bl) => {
+              (bl.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.7;
+            });
+          }
+        }
+
+        // Update physical position
+        v.mesh.position.z += v.currentSpeed * delta * v.direction;
+
+        // Wrap around boulevard boundaries
+        if (v.direction === 1 && v.mesh.position.z > roadBounds.maxZ) {
+          v.mesh.position.z = roadBounds.minZ;
+        } else if (v.direction === -1 && v.mesh.position.z < roadBounds.minZ) {
+          v.mesh.position.z = roadBounds.maxZ;
+        }
+
+        // Realistic wheel spinning matching linear speed (omega = v / r)
+        const spinAngle = (v.currentSpeed * delta) / 0.4;
+        v.wheels.forEach((w) => {
+          w.rotation.x += spinAngle * v.direction;
+        });
       }
     });
 
-    // 3. Smoothly animate flood water level towards waterTarget
+    // 6. Smoothly animate flood water level towards waterTarget
     const currentY = floodWaterMesh.position.y;
     const targetY = waterTarget > 0 ? waterTarget : -0.5;
     floodWaterMesh.position.y += (targetY - currentY) * delta * 2.0;
 
-    // 4. Animate deployable flood barriers rising when flooded
+    // 7. Animate deployable flood barriers rising when flooded
     const barrierTargetY = waterTarget > 0 ? 0.6 : -0.5;
     floodBarriers.forEach((b) => {
       b.position.y += (barrierTargetY - b.position.y) * delta * 2.5;
     });
 
-    // 5. Animate Hooghly River subtle undulations
+    // 8. Animate Hooghly River subtle undulations
     riverMesh.position.y = -0.6 + Math.sin(elapsed * 1.5) * 0.08;
   };
 
@@ -819,6 +1053,8 @@ export function buildKolkata2050City(): CityEnvironment {
     group: cityGroup,
     buildings,
     vehicles,
+    trafficLights,
+    pedestrians,
     turbines,
     floodWaterMesh,
     riverMesh,
