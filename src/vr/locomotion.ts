@@ -320,32 +320,42 @@ export class LocomotionManager {
       }
     }
 
-    // 3. Gamepad Thumbstick Locomotion & Snap Turn
+    // 3. Gamepad Thumbstick Locomotion & Snap Turn (Optimized for Meta Quest 3S / Touch Plus)
     const inputSources = session.inputSources;
     for (let i = 0; i < inputSources.length; i++) {
       const source = inputSources[i];
       if (source.gamepad && source.gamepad.axes) {
         const axes = source.gamepad.axes;
-        // axes[2] is X (thumbstick), axes[3] is Y
+        // Standard WebXR Gamepad mapping: axes[2] is thumbstick X, axes[3] is thumbstick Y
         const stickX = axes.length >= 4 ? axes[2] : axes[0];
         const stickY = axes.length >= 4 ? axes[3] : axes[1];
+        const handedness = source.handedness;
 
-        // Smooth locomotion forward/backward
-        if (Math.abs(stickY) > 0.15) {
-          const moveSpeed = 4.5 * delta;
+        if (handedness === 'left' || (!handedness && i === 1)) {
+          // Left hand: Movement (Forward/Back + Strafe Left/Right)
+          const moveSpeed = 6.0 * delta;
           const forward = new THREE.Vector3();
           this.camera.getWorldDirection(forward);
           forward.y = 0;
           forward.normalize();
-          this.userRig.position.addScaledVector(forward, -stickY * moveSpeed);
-        }
 
-        // Snap Turn (30 degrees step with debounce)
-        const now = performance.now();
-        if (Math.abs(stickX) > 0.65 && now - this.lastSnapTurnTime > 300) {
-          const turnAngle = stickX > 0 ? -Math.PI / 6 : Math.PI / 6;
-          this.userRig.rotation.y += turnAngle;
-          this.lastSnapTurnTime = now;
+          const side = new THREE.Vector3();
+          side.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+          if (Math.abs(stickY) > 0.15) {
+            this.userRig.position.addScaledVector(forward, -stickY * moveSpeed);
+          }
+          if (Math.abs(stickX) > 0.15) {
+            this.userRig.position.addScaledVector(side, stickX * moveSpeed);
+          }
+        } else {
+          // Right hand: 45° Snap Turn Left / Right
+          const now = performance.now();
+          if (Math.abs(stickX) > 0.65 && now - this.lastSnapTurnTime > 280) {
+            const turnAngle = stickX > 0 ? -Math.PI / 4 : Math.PI / 4;
+            this.userRig.rotation.y += turnAngle;
+            this.lastSnapTurnTime = now;
+          }
         }
       }
     }

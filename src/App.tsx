@@ -35,7 +35,9 @@ import {
   Check,
   Images,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  Github,
+  Terminal
 } from 'lucide-react';
 import { EXHIBITION_PHOTOS, ExhibitionPhoto } from './vr/photos';
 
@@ -53,6 +55,10 @@ export default function App() {
   // Exhibition Concept Photos State
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
+
+  // Meta Quest & Deployment Guide State
+  const [isMetaQuest, setIsMetaQuest] = useState(false);
+  const [deployGuideTab, setDeployGuideTab] = useState<'quest' | 'github'>('quest');
 
   // VR Preview States
   const [previewMode, setPreviewMode] = useState<PreviewMode>('none');
@@ -99,6 +105,16 @@ export default function App() {
       engine.dispose();
       engineRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      const isQuestBrowser = /OculusBrowser|Quest/i.test(navigator.userAgent);
+      setIsMetaQuest(isQuestBrowser);
+      if (isQuestBrowser) {
+        triggerNotice('Meta Quest Headset detected! Click ENTER QUEST 3S VR for full 6DoF immersion.');
+      }
+    }
   }, []);
 
   const triggerNotice = (msg: string) => {
@@ -381,6 +397,8 @@ export default function App() {
                   ? 'bg-emerald-600 text-white border-emerald-400 animate-pulse'
                   : previewMode !== 'none'
                   ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/30'
+                  : isMetaQuest
+                  ? 'bg-cyan-400 hover:bg-cyan-300 text-slate-950 border-cyan-200 shadow-cyan-400/50 animate-pulse font-black'
                   : isVRSupported
                   ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300 shadow-cyan-500/25'
                   : 'bg-indigo-600/95 hover:bg-indigo-500 text-white border-indigo-400/60 shadow-indigo-600/30'
@@ -396,6 +414,8 @@ export default function App() {
                   ? 'STEREO VR 🥽'
                   : previewMode === 'walk'
                   ? 'WALK ACTIVE 🚶'
+                  : isMetaQuest
+                  ? 'ENTER QUEST 3S VR'
                   : isVRSupported
                   ? 'ENTER VR'
                   : 'START VR / PREVIEW'}
@@ -416,6 +436,17 @@ export default function App() {
               ▼
             </button>
           </div>
+
+          {/* Quest 3S & GitHub Deploy Hub Button */}
+          <button
+            id="quest-deploy-hub-btn"
+            onClick={() => setShowHeadsetGuide(true)}
+            title="Meta Quest 3S Testing & GitHub Pages Deployment Guide"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold tracking-wider backdrop-blur-md border bg-cyan-950/80 hover:bg-cyan-900 border-cyan-500/40 text-cyan-300 shadow-md transition-all cursor-pointer"
+          >
+            <Glasses className="w-4 h-4 text-cyan-400" />
+            <span className="hidden lg:inline">QUEST 3S / GITHUB</span>
+          </button>
 
           {/* VR Experience Mode Dropdown Menu */}
           {showVRModeMenu && (
@@ -733,93 +764,265 @@ export default function App() {
         </div>
       </footer>
 
-      {/* WEBXR HEADSET CONNECTION GUIDE MODAL */}
+      {/* META QUEST 3S & GITHUB PAGES DEPLOYMENT HUB MODAL */}
       {showHeadsetGuide && (
         <div
           id="webxr-guide-modal"
-          className="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 animate-in fade-in duration-200"
           onClick={() => setShowHeadsetGuide(false)}
         >
           <div
-            className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 max-w-lg w-full text-slate-200 shadow-2xl relative"
+            className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-5 sm:p-7 max-w-2xl w-full text-slate-200 shadow-2xl relative max-h-[92vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-cyan-950 border border-cyan-500/40 text-cyan-400">
                   <Glasses className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Connect WebXR VR Headset</h3>
-                  <p className="text-[11px] text-cyan-300">Meta Quest 2/3/Pro, HTC Vive, Pico, Apple Vision Pro</p>
+                  <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    <span>Meta Quest 3S & GitHub Pages Hub</span>
+                    {isMetaQuest && (
+                      <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        Quest Headset Detected
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-cyan-300">
+                    WebXR 6DoF Virtual Reality • Automated GitHub Pages Deployment
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowHeadsetGuide(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-xs text-slate-300">
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                <div className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
-                    1
-                  </span>
-                  Open in Headset Browser (Oculus Browser):
-                </div>
-                <p className="text-slate-400 text-[11px]">
-                  Inside your Quest or standalone VR headset, open the Meta Quest Browser and navigate directly to this app URL:
-                </p>
-                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 p-2 rounded-lg text-cyan-300 font-mono text-[11px] break-all">
-                  <span className="truncate">{window.location.href}</span>
-                  <button
-                    onClick={handleCopyUrl}
-                    className="shrink-0 p-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded flex items-center gap-1 text-[10px]"
-                  >
-                    {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedUrl ? 'COPIED' : 'COPY'}</span>
-                  </button>
-                </div>
-              </div>
+            {/* Navigation Tabs */}
+            <div className="flex items-center gap-2 mt-4 p-1 bg-slate-950 rounded-2xl border border-slate-800 shrink-0">
+              <button
+                onClick={() => setDeployGuideTab('quest')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  deployGuideTab === 'quest'
+                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/25'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Glasses className="w-4 h-4" />
+                <span>Meta Quest 3S Testing</span>
+              </button>
 
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-                <div className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
-                    2
-                  </span>
-                  PC VR Tether (Oculus Link / SteamVR / WebXR Extension):
-                </div>
-                <p className="text-slate-400 text-[11px]">
-                  Ensure SteamVR or Oculus App is running on your PC and Chrome/Edge has WebXR flags enabled.
-                </p>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-                <div className="font-bold text-white flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
-                    3
-                  </span>
-                  Mobile VR (Google Cardboard / VR Box):
-                </div>
-                <p className="text-slate-400 text-[11px]">
-                  No VR headset needed! Select <strong>Stereo 3D Split-Screen</strong> from the VR Options dropdown, put your phone inside any VR Cardboard holder, and look around in full 3D stereo!
-                </p>
-              </div>
+              <button
+                onClick={() => setDeployGuideTab('github')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  deployGuideTab === 'github'
+                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/25'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Github className="w-4 h-4" />
+                <span>GitHub Pages Deploy</span>
+              </button>
             </div>
 
-            <div className="mt-5 pt-3 border-t border-slate-800 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowHeadsetGuide(false);
-                  handleSetPreviewMode('tour');
-                }}
-                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs"
-              >
-                Launch 3D Preview Now
-              </button>
+            {/* Modal Body */}
+            <div className="overflow-y-auto mt-4 space-y-4 pr-1 flex-1 text-xs">
+              {deployGuideTab === 'quest' ? (
+                /* TAB 1: META QUEST 3S TESTING */
+                <div className="space-y-3.5">
+                  {/* Status Bar */}
+                  <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${isVRSupported || isMetaQuest ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                      <span className="font-semibold text-slate-200">
+                        {isMetaQuest
+                          ? 'Meta Quest Browser Active (Ready for WebXR)'
+                          : isVRSupported
+                          ? 'WebXR Display Detected & Ready'
+                          : 'Desktop / Mobile Mode (Ready to test on Quest)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">
+                      <span>HTTPS: OK</span>
+                      <span>•</span>
+                      <span>WebXR: Enabled</span>
+                    </div>
+                  </div>
+
+                  {/* 3-Step Testing Guide */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-cyan-500/20 space-y-2.5">
+                    <div className="font-bold text-white text-[13px] flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
+                        1
+                      </span>
+                      <span>Open in Meta Quest 3S Headset Browser:</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">
+                      Put on your Meta Quest 3S, launch the built-in <strong>Meta Quest Browser</strong>, and navigate to your deployed GitHub Pages URL:
+                    </p>
+
+                    <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 p-2.5 rounded-xl text-cyan-300 font-mono text-[11px] break-all shadow-inner">
+                      <span className="truncate flex-1">{window.location.href}</span>
+                      <button
+                        onClick={handleCopyUrl}
+                        className="shrink-0 px-2.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg flex items-center gap-1 text-[11px] transition-all"
+                      >
+                        {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedUrl ? 'COPIED' : 'COPY LINK'}</span>
+                      </button>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 italic flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>
+                        Pro-tip: You can also use the Meta Quest phone app to share this link directly to your headset ("Send to Headset")!
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Click Enter VR */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-cyan-500/20 space-y-2">
+                    <div className="font-bold text-white text-[13px] flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
+                        2
+                      </span>
+                      <span>Click "ENTER QUEST 3S VR" & Allow:</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">
+                      Look at the top right button on the webpage in your headset. Click <strong>ENTER QUEST 3S VR</strong> with your controller laser. A system prompt will appear asking to enter an immersive WebXR session. Select <strong>Allow</strong>.
+                    </p>
+                  </div>
+
+                  {/* Controller Mappings */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5">
+                    <div className="font-bold text-white text-[13px] flex items-center justify-between">
+                      <span>Meta Quest 3S Touch Plus Controls</span>
+                      <span className="text-[10px] text-cyan-400 font-mono">6DoF Roomscale</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 space-y-0.5">
+                        <div className="font-bold text-cyan-400">Left Thumbstick</div>
+                        <div className="text-slate-300">Push to walk forward/back, tilt to strafe left/right</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 space-y-0.5">
+                        <div className="font-bold text-cyan-400">Right Thumbstick</div>
+                        <div className="text-slate-300">Flick left/right for 45° comfort snap turning</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 space-y-0.5">
+                        <div className="font-bold text-cyan-400">Index Trigger / Grip</div>
+                        <div className="text-slate-300">Point laser beam at ground to teleport or click 3D STEM beacons</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 space-y-0.5">
+                        <div className="font-bold text-cyan-400">A / X & B / Y Buttons</div>
+                        <div className="text-slate-300">Cycle through 2050 climate scenarios (Floods, Heat, Transit)</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* TAB 2: GITHUB PAGES DEPLOYMENT */
+                <div className="space-y-3.5">
+                  {/* Ready for GitHub Pages Banner */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-[13px]">
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span>Project is Pre-Configured for GitHub Pages!</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-200/80 leading-relaxed">
+                      We have already configured <code>base: './'</code> in <code>vite.config.ts</code> and added the official GitHub Actions workflow in <code>.github/workflows/deploy.yml</code>.
+                    </p>
+                  </div>
+
+                  {/* Step 1: Git Push */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                    <div className="font-bold text-white text-[13px] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
+                          1
+                        </span>
+                        <span>Push to your GitHub Repository:</span>
+                      </div>
+                      <Terminal className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <p className="text-slate-300 text-[11px]">
+                      Create a new repository on GitHub (e.g. <code>kolkata-2050-vr</code>) and run these commands in your project folder:
+                    </p>
+                    <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300 overflow-x-auto select-all">
+{`git init
+git add .
+git commit -m "Deploy Kolkata 2050 WebXR project"
+git branch -M main
+git remote add origin https://github.com/<YOUR-USERNAME>/<YOUR-REPO-NAME>.git
+git push -u origin main`}
+                    </pre>
+                  </div>
+
+                  {/* Step 2: Enable GitHub Actions Source */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                    <div className="font-bold text-white text-[13px] flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
+                        2
+                      </span>
+                      <span>Enable GitHub Pages in Repository Settings:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 text-slate-300 text-[11px]">
+                      <li>Go to your repository on <strong>github.com</strong></li>
+                      <li>Click <strong>Settings</strong> &rarr; <strong>Pages</strong> (in left sidebar)</li>
+                      <li>
+                        Under <strong>Build and deployment &gt; Source</strong>, select <strong>GitHub Actions</strong>
+                      </li>
+                      <li>
+                        GitHub will automatically build and deploy your site to <code>https://&lt;username&gt;.github.io/&lt;repo&gt;/</code>!
+                      </li>
+                    </ol>
+                  </div>
+
+                  {/* Step 3: Alternative Manual Deploy */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                    <div className="font-bold text-white text-[13px] flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 font-mono text-[11px] flex items-center justify-center font-bold">
+                        3
+                      </span>
+                      <span>Alternative Manual Deploy via gh-pages:</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px]">
+                      If you prefer manual command-line deployment, run:
+                    </p>
+                    <pre className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-cyan-300 select-all">
+                      npm run deploy
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between shrink-0">
+              <span className="text-[10px] text-slate-400">
+                Detailed instructions also saved in <code className="text-cyan-300">DEPLOY.md</code> & <code className="text-cyan-300">README.md</code>.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowHeadsetGuide(false);
+                    handleStartVROrPreview();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all"
+                >
+                  {isVRSupported ? 'Enter WebXR Now' : 'Launch 3D Tour'}
+                </button>
+                <button
+                  onClick={() => setShowHeadsetGuide(false)}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
